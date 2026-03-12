@@ -1,0 +1,29 @@
+PHASE 2 — QUICK CHECKLIST
+=========================
+
+Already done for you:
+  [x] AUTH_SECRET generated and written to .env.local
+  [x] AUTH_URL set to http://localhost:3000 in .env.local
+
+You do:
+
+STEP 1 — SUPABASE
+  [ ] Create project at https://supabase.com (New project → name, password, region)
+  [ ] SQL Editor → New query → paste contents of supabase/next_auth_schema.sql → Run
+  [ ] Settings → API → Exposed schemas → add "next_auth"
+  [ ] Copy Project URL → put in .env.local as SUPABASE_URL=...
+  [ ] Copy service_role key → put in .env.local as SUPABASE_SERVICE_ROLE_KEY=...
+
+STEP 2 — GOOGLE CLOUD
+  [ ] Go to https://console.cloud.google.com/ → create or select project
+  [ ] APIs & Services → OAuth consent screen → External → App name "FlowDesk", your email → Save
+  [ ] APIs & Services → Credentials → Create credentials → OAuth client ID
+  [ ] Application type: Web application
+  [ ] Authorized redirect URI: http://localhost:3000/api/auth/callback/google
+  [ ] Copy Client ID and Client secret → .env.local as GOOGLE_CLIENT_ID=... and GOOGLE_CLIENT_SECRET=...
+
+STEP 3 — RUN
+  [ ] npm run dev
+  [ ] Open http://localhost:3000 → Sign in with Google → see your name and "Phase 2 complete"
+
+Full details: docs/PHASE2_SETUP.md

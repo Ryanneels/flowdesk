@@ -120,11 +120,148 @@ flowdesk/
 
 ---
 
-## Next: Phase 2
+## Phase 2 — Auth ✅
 
-After GitHub and Vercel are set up and you’ve confirmed the live URL works, we’ll add:
+Phase 2 adds **sign-in with Google** and stores **tokens in Supabase** so FlowDesk can use Gmail, Calendar, and Tasks on your behalf (including when you’re offline).
 
-- **NextAuth.js** with **Google OAuth**
-- **Multi-account support** and storing tokens in **Supabase**
+### What we added
 
-So you can sign in with Google and the app can act on your behalf (Gmail, Calendar, Tasks) in later phases.
+| Thing | What it does |
+|-------|----------------|
+| **NextAuth.js (v5)** | Handles “Sign in with Google,” sessions, and callbacks. |
+| **Supabase adapter** | Saves users, sessions, and OAuth tokens (refresh + access) in Supabase. |
+| **Google OAuth scopes** | We request `gmail.modify`, `calendar`, and `tasks` so we can use those APIs later. |
+
+### Run Phase 2 locally (setup steps)
+
+**Detailed walkthrough:** see **[docs/PHASE2_SETUP.md](docs/PHASE2_SETUP.md)** for step-by-step instructions with exact clicks and what to copy.
+
+Do these once, then run the app.
+
+#### 1. Create a Supabase project
+
+1. Go to [supabase.com](https://supabase.com) and sign in (or create an account).
+2. Click **New project**. Pick an organization, name (e.g. `flowdesk`), database password, and region.
+3. Wait for the project to be ready.
+
+#### 2. Create the NextAuth tables in Supabase
+
+1. In the Supabase dashboard, open **SQL Editor**.
+2. Open the file **`supabase/next_auth_schema.sql`** in this repo and copy its full contents.
+3. Paste into the SQL Editor and click **Run**.
+4. Go to **Settings** → **API**. Under **Exposed schemas**, add **`next_auth`** and save. (This lets the adapter use the `next_auth` schema.)
+
+#### 3. Get Supabase keys
+
+Still in **Settings** → **API**:
+
+- **Project URL** → copy. This is `SUPABASE_URL`.
+- **Project API keys** → **service_role** (secret) → copy. This is `SUPABASE_SERVICE_ROLE_KEY`. Keep it secret.
+
+#### 4. Create Google OAuth credentials
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) and create or select a project.
+2. Open **APIs & Services** → **Credentials** → **Create credentials** → **OAuth client ID**.
+3. If asked, configure the **OAuth consent screen** (External, your email, app name e.g. “FlowDesk”, save).
+4. Application type: **Web application**.
+5. **Authorized redirect URIs** — add:
+   - `http://localhost:3000/api/auth/callback/google`
+   - Your production URL, e.g. `https://flowdesk-xxx.vercel.app/api/auth/callback/google`
+6. Create. Copy the **Client ID** and **Client secret** → these are `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+
+#### 5. Environment variables
+
+1. In the project folder, copy the example env file:
+   ```bash
+   copy .env.local.example .env.local
+   ```
+2. Open **`.env.local`** and set:
+   - `AUTH_SECRET` — run `npx auth secret` in the project and paste the output.
+   - `AUTH_URL` — `http://localhost:3000` for local dev.
+   - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from step 4.
+   - `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from step 3.
+
+#### 6. Run the app
+
+```bash
+npm run dev
+```
+
+Open **http://localhost:3000**. You should see **Sign in with Google**. After signing in, you’ll see your name and “Phase 2 complete.” Your tokens are stored in Supabase.
+
+### Deploy Phase 2 to Vercel
+
+In the Vercel project **Settings** → **Environment Variables**, add the same variables as in `.env.local`:
+
+- `AUTH_SECRET`, `AUTH_URL` (use your Vercel URL, e.g. `https://flowdesk-xxx.vercel.app`), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+
+Add **Authorized redirect URIs** for your Vercel URL in Google Cloud Console (see step 4 above). Then redeploy.
+
+### Multi-account (later)
+
+Right now you sign in with one Google account. “Add account” and “switch account” (multiple Google accounts in one FlowDesk session) can be added in a later step.
+
+---
+
+---
+
+## Phase 3 — Database ✅
+
+Phase 3 adds the **FlowDesk app tables** in Supabase and confirms the connection.
+
+### What we added
+
+| Table | Purpose |
+|-------|---------|
+| **label_rules** | Approved email → label rules for Gmail auto-labeling (Phase 5). |
+| **scheduled_tasks** | Google Tasks that have been slotted onto the calendar. |
+| **habits** | Recurring time blocks (e.g. exercise 7am–8am daily). |
+| **activity_log** | Audit log of every action the app takes (for the dashboard). |
+
+All tables use `user_id` referencing `next_auth.users(id)`.
+
+### Run Phase 3 (one-time)
+
+1. Open **Supabase Dashboard** → your project → **SQL Editor** → **New query**.
+2. Open **`supabase/flowdesk_tables.sql`** in this repo, copy **all** of its contents, and paste into the editor.
+3. Click **Run**. You should see “Success. No rows returned.”
+4. Confirm the connection: open **http://localhost:3000/api/debug-db** in your browser. You should see `"ok": true` and “Phase 3 DB check passed.”
+
+### Project structure (updated)
+
+```
+supabase/
+├── next_auth_schema.sql    # Auth tables (Phase 2)
+├── flowdesk_tables.sql     # App tables (Phase 3)
+├── grant_next_auth_permissions.sql
+└── README.md
+```
+
+---
+
+## Phase 4 — Gmail integration ✅
+
+Phase 4 **connects the Gmail API**: read emails, list labels, and apply labels (foundation for AI labeling in Phase 5).
+
+### What we added
+
+| Item | Purpose |
+|------|---------|
+| **lib/google-token.ts** | Gets the user’s Google access token from Supabase (next_auth.accounts), refreshes it if expired, and returns it for API calls. |
+| **GET /api/gmail/labels** | List the signed-in user’s Gmail labels. |
+| **GET /api/gmail/messages** | List messages (query: `maxResults`, `labelIds`; default: INBOX, 10). |
+| **GET /api/gmail/messages/[id]** | Get one message (metadata: subject, from, snippet). |
+| **POST /api/gmail/messages/[id]/labels** | Add/remove labels on a message (body: `addLabelIds`, `removeLabelIds`). |
+| **GmailPreview (dashboard)** | When signed in, shows a card with your labels and recent inbox messages. |
+
+### How to try it
+
+1. Sign in at **http://localhost:3000**.
+2. The **Gmail (Phase 4)** card should show your labels and recent inbox message IDs.
+3. Optional: call the APIs directly (e.g. `GET /api/gmail/labels`, `GET /api/gmail/messages?maxResults=5`).
+
+---
+
+## Next: Phase 5
+
+Phase 5 will add **AI email labeling** with Gemini: suggest labels for new emails and an approval flow before applying rules.
