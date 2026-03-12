@@ -31,7 +31,9 @@ In the project → **Settings** → **Environment Variables**, add these for **P
 | Name | Value | Notes |
 |------|--------|--------|
 | `AUTH_SECRET` | (from `npx auth secret`) | Required for NextAuth |
-| `AUTH_URL` | `https://your-app.vercel.app` | Your Vercel URL |
+| `AUTH_URL` | `https://your-app.vercel.app/api/auth` | **Must be exact:** your Vercel URL + `/api/auth` (no trailing slash). Required so Google sign-in redirects back correctly. |
+| `NEXTAUTH_URL` | Same as `AUTH_URL` | Set to the same value as `AUTH_URL`. Some code paths still use this; avoids redirect/callback issues. |
+| `AUTH_TRUST_HOST` | `true` | Recommended in production (Vercel sets this automatically in many cases). |
 | `GOOGLE_CLIENT_ID` | From Google Cloud Console | OAuth client |
 | `GOOGLE_CLIENT_SECRET` | From Google Cloud Console | OAuth client |
 | `SUPABASE_URL` | From Supabase project settings | Project URL |
@@ -41,6 +43,50 @@ In the project → **Settings** → **Environment Variables**, add these for **P
 | `GMAIL_PUBSUB_TOPIC` | See step 3 below | Full topic name for live Gmail |
 
 Then **Save** and trigger a **Redeploy** (Deployments → ⋮ → Redeploy).
+
+---
+
+## 2b. If Google sign-in gets stuck loading
+
+If after clicking “Sign in with Google” the app hangs or never returns from Google:
+
+1. **Set `AUTH_URL` correctly in Vercel**
+   - It must be your **exact** app URL including the auth path:  
+     `https://YOUR_ACTUAL_DOMAIN.vercel.app/api/auth`  
+   - No trailing slash. Example: `https://flowdesk-abc123.vercel.app/api/auth`
+   - **Settings** → **Environment Variables** → edit `AUTH_URL` → **Save** → **Redeploy**.
+
+2. **Add the production redirect URI in Google Cloud**
+   - On your **live** app, open **`https://YOUR_ACTUAL_DOMAIN.vercel.app/api/debug-auth-url`** in the browser. Copy the **`redirectUriForGoogle`** value (it should look like `https://..../api/auth/callback/google`).
+   - [Google Cloud Console](https://console.cloud.google.com) → **APIs & Services** → **Credentials** → open your **OAuth 2.0 Client ID** (Web application).
+   - Under **Authorized redirect URIs**, click **Add URI** and paste that URL **exactly** (no trailing slash).
+   - **Save**.
+
+3. **Set both AUTH_URL and NEXTAUTH_URL** in Vercel to the same value (e.g. `https://yourapp.vercel.app/api/auth`). Some auth code paths use `NEXTAUTH_URL`; having both avoids redirect issues.
+
+4. **Redeploy** after changing env vars so the new values are used.
+
+### 2c. If login still hangs after fixing AUTH_URL and Google URI
+
+1. **See where it hangs (browser)**
+   - Open your app in Chrome/Edge, press **F12** → **Network** tab. Leave it open.
+   - Click **Sign in with Google**, sign in at Google, then watch the **Network** tab.
+   - Find the request to **`/api/auth/callback/google`** (it may have `?code=...&state=...`).
+   - If that request stays **Pending** and never completes → the server is hanging (often Supabase or the adapter). If it returns **302** or **500** → note the status and any redirect.
+
+2. **See what the server does (Vercel logs)**
+   - In **Vercel** → your project → **Deployments** → open the latest deployment.
+   - Click **Functions** (or **Logs** / **Runtime Logs**).
+   - Try signing in again, then refresh the logs. You should see:
+     - `[NextAuth] Incoming callback request: ... has code` when the callback is hit.
+     - `[NextAuth] Callback response status: 302` if it succeeded, or `[NextAuth] Callback error: ...` if it threw.
+   - If you see **Callback error** or a Supabase/DB error, fix that (e.g. Supabase URL/key, or run the SQL scripts in Supabase).
+
+3. **Check Supabase from production**
+   - On your **live** app open **`https://YOUR_APP.vercel.app/api/debug-db`**.
+   - If that fails or times out, the app cannot reach Supabase from Vercel (e.g. wrong `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`, or network). Fix env and redeploy.
+
+4. **Try in a private/incognito window** so no old cookies or cache affect the flow.
 
 ---
 

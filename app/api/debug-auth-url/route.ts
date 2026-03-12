@@ -6,15 +6,20 @@
 import { NextResponse } from "next/server";
 
 export async function GET() {
-  const authUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "";
+  let authUrl = (process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "").replace(/\/$/, "");
+  // AUTH_URL must be the base path /api/auth, not the full callback URL
+  if (authUrl.endsWith("/callback/google")) {
+    authUrl = authUrl.replace(/\/callback\/google$/, "");
+  }
   const callbackUrl = authUrl
-    ? `${authUrl.replace(/\/$/, "")}/callback/google`
+    ? `${authUrl}/callback/google`
     : "(set AUTH_URL in Vercel to your app URL + /api/auth)";
 
   return NextResponse.json({
     message: "Add this EXACT URL to Google Cloud Console → Credentials → your OAuth client → Authorized redirect URIs",
     redirectUriForGoogle: callbackUrl,
-    authUrlUsed: authUrl || "(not set)",
-    hint: "If redirectUriForGoogle shows localhost or (not set), AUTH_URL is wrong or not set in Vercel. Redeploy after changing env.",
+    authUrlShouldBe: authUrl ? `${authUrl} (use this for AUTH_URL and NEXTAUTH_URL)` : "(not set)",
+    authUrlActuallySet: process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "(not set)",
+    hint: "AUTH_URL and NEXTAUTH_URL must be the base path only, e.g. https://yourapp.vercel.app/api/auth (no /callback/google).",
   });
 }

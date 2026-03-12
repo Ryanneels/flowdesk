@@ -12,6 +12,7 @@ import { Suspense } from "react";
 function AuthErrorContent() {
   const searchParams = useSearchParams();
   const error = searchParams.get("error") ?? "Unknown error";
+  const isOAuth = error === "OAuthCallback" || error === "OAuthCallbackError" || error === "OAuthAccountNotLinked";
 
   return (
     <div className="max-w-md w-full rounded-2xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-700 dark:bg-slate-800/50">
@@ -24,6 +25,16 @@ function AuthErrorContent() {
       <p className="mt-2 font-mono text-sm bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded break-all">
         {error}
       </p>
+      {isOAuth && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-900/20">
+          <p className="font-medium text-amber-900 dark:text-amber-200">If sign-in hangs or shows OAuthCallback:</p>
+          <ol className="mt-2 list-decimal list-inside space-y-1 text-amber-800 dark:text-amber-300">
+            <li>On your <strong>live app URL</strong>, open <a href="/api/debug-auth-url" target="_blank" rel="noopener noreferrer" className="underline">/api/debug-auth-url</a> and copy the <code>redirectUriForGoogle</code> value.</li>
+            <li>In <strong>Google Cloud Console</strong> → APIs &amp; Services → Credentials → your OAuth 2.0 Client → <strong>Authorized redirect URIs</strong>, add that URL <em>exactly</em> (no trailing slash).</li>
+            <li>In <strong>Vercel</strong> → Settings → Environment Variables, set <code>AUTH_URL</code> to your app URL + <code>/api/auth</code> (e.g. <code>https://yourapp.vercel.app/api/auth</code>). Set <code>NEXTAUTH_URL</code> to the same value. Redeploy.</li>
+          </ol>
+        </div>
+      )}
       <p className="mt-4 text-sm text-slate-600 dark:text-slate-400">
         <strong>Configuration</strong> often means an <strong>AdapterError</strong> (Supabase
         failed while saving your session). In the terminal look for{" "}

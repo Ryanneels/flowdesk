@@ -26,11 +26,19 @@ async function handleRequest(
   handler: (req: NextRequest) => Promise<Response>,
   req: NextRequest
 ): Promise<Response> {
+  const path = req.nextUrl.pathname;
+  if (path.includes("callback")) {
+    console.log("[NextAuth] Incoming callback request:", path, req.nextUrl.searchParams.has("code") ? "has code" : "no code");
+  }
   try {
-    return await handler(req);
+    const res = await handler(req);
+    if (path.includes("callback")) {
+      console.log("[NextAuth] Callback response status:", res.status);
+    }
+    return res;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("[NextAuth] Callback error:", err);
+    console.error("[NextAuth] Callback error:", message);
     return new Response(errorHtml(message), {
       status: 500,
       headers: { "Content-Type": "text/html; charset=utf-8" },
