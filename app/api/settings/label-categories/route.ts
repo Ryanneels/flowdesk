@@ -80,9 +80,9 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const validKeys = new Set(CANNED_LABEL_CATEGORIES.map((c) => c.key));
+  const validKeys = new Set<string>(CANNED_LABEL_CATEGORIES.map((c) => c.key));
   const rows = body
-    .filter((r) => validKeys.has(r.category_key as keyof typeof CANNED_LABEL_CATEGORIES))
+    .filter((r) => typeof r.category_key === "string" && validKeys.has(r.category_key))
     .map((r) => ({
       user_id: session.user!.id,
       category_key: r.category_key,
