@@ -46,7 +46,7 @@ export function AuthUI() {
           {csrfToken && (
             <input name="csrfToken" type="hidden" value={csrfToken} />
           )}
-          <input name="callbackUrl" type="hidden" value="/" />
+          <input name="callbackUrl" type="hidden" value="/auth/callback" />
           <button
             type="submit"
             disabled={!csrfToken}

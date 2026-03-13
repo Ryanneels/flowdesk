@@ -130,12 +130,27 @@ Live processing runs when Gmail receives new mail. Gmail sends a notification to
 
 ---
 
-## 4. Supabase: run all SQL
+## 4. Supabase: run all SQL and expose next_auth
+
+If sign-in fails with **Configuration** and the error page says AdapterError (Supabase failed saving session), do the following.
+
+### Expose the next_auth schema (required)
+
+1. **Supabase Dashboard** → your project → **Settings** (gear) → **API** (or **Database**).
+2. Find **Exposed schemas** (or **Schema** / **Data API**).
+3. Add **`next_auth`** to the list (with `public`, etc.). **Save**.
+4. If you don’t see “Exposed schemas”, run the last two lines of `supabase/next_auth_schema.sql` in the SQL Editor:
+   ```sql
+   ALTER ROLE authenticator SET pgrst.db_schemas = 'public, next_auth';
+   NOTIFY pgrst, 'reload schema';
+   ```
+
+### Run SQL in order
 
 In **Supabase** → **SQL Editor**, run these in order (if you haven’t already):
 
 1. **NextAuth schema**  
-   Contents of `supabase/next_auth_schema.sql` (or run the schema your NextAuth adapter expects).
+   Full contents of `supabase/next_auth_schema.sql`.
 
 2. **Grants for NextAuth**  
    `supabase/grant_next_auth_permissions.sql`

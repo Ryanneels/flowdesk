@@ -46,18 +46,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.AUTH_SECRET,
   // Our route is at app/api/auth/[...nextauth], so basePath must be /api/auth
   basePath: "/api/auth",
-  // Trust the host (needed for Vercel and dev)
+  // Trust the host (needed for Vercel/proxy). Set AUTH_TRUST_HOST=true in prod if redirects fail.
   trustHost: true,
+  // Force secure cookies in production so session persists after OAuth redirect (Vercel/HTTPS).
+  useSecureCookies: process.env.NODE_ENV === "production",
   pages: {
     signIn: "/",
     error: "/auth/error",
   },
   callbacks: {
-    // Add user id to the session so we can use it in the app
-    session({ session, user }) {
-      if (session.user) {
-        (session.user as { id?: string }).id = user.id;
-      }
+    // Add user id to the session. With DB adapter we get `user`; in JWT flows we get `token` (no `user`).
+    session({ session, user, token }) {
+      if (!session?.user) return session;
+      const id = user?.id ?? (token?.sub as string | undefined);
+      if (id) (session.user as { id?: string }).id = id;
       return session;
     },
   },
