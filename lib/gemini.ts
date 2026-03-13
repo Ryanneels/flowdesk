@@ -144,7 +144,10 @@ Use only the category keys from the lists above.`;
   const raw = (await res.json()) as Record<string, unknown>;
   if (!res.ok) {
     console.error("[Gemini] API error:", res.status, JSON.stringify(raw, null, 2));
-    return { gps: gps ?? (enabledGps[0] ?? ACTION_REQUIRED_KEY), drip: enabledDrip[0] ?? "drip-delegate" };
+    return {
+      gps: ruleGps ?? enabledGps[0] ?? ACTION_REQUIRED_KEY,
+      drip: enabledDrip[0] ?? "drip-delegate",
+    };
   }
 
   const data = raw as {
