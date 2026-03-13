@@ -1,6 +1,7 @@
 /**
  * Get a valid Google access token for the given user, refreshing if expired.
  * Used by Gmail, Calendar, and Tasks API routes.
+ * Accepts either the database user id (uuid) or Google's providerAccountId (session may have token.sub).
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -20,12 +21,28 @@ export async function getGoogleAccessToken(userId: string): Promise<string | nul
     auth: { persistSession: false },
   });
 
-  const { data: account, error } = await supabase
+  // Try by database userId first, then by providerAccountId (Google id) when session has token.sub
+  let matchByProviderId = false;
+  let { data: account, error } = await supabase
     .from("accounts")
-    .select("access_token, refresh_token, expires_at")
+    .select("access_token, refresh_token, expires_at, \"userId\"")
     .eq("userId", userId)
     .eq("provider", "google")
     .maybeSingle();
+
+  if ((error || !account) && userId) {
+    const byProvider = await supabase
+      .from("accounts")
+      .select("access_token, refresh_token, expires_at, \"userId\"")
+      .eq("providerAccountId", userId)
+      .eq("provider", "google")
+      .maybeSingle();
+    if (!byProvider.error && byProvider.data) {
+      account = byProvider.data;
+      error = null;
+      matchByProviderId = true;
+    }
+  }
 
   if (error || !account?.access_token || !account?.refresh_token) return null;
 
@@ -44,14 +61,17 @@ export async function getGoogleAccessToken(userId: string): Promise<string | nul
   if (!refreshed) return account.access_token;
 
   const newExpiresAt = Math.floor(Date.now() / 1000) + (refreshed.expires_in ?? 3600);
-  await supabase
+  let updateQuery = supabase
     .from("accounts")
     .update({
       access_token: refreshed.access_token,
       expires_at: newExpiresAt,
     })
-    .eq("userId", userId)
     .eq("provider", "google");
+  updateQuery = matchByProviderId
+    ? updateQuery.eq("providerAccountId", userId)
+    : updateQuery.eq("userId", userId);
+  await updateQuery;
 
   return refreshed.access_token;
 }

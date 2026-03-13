@@ -212,6 +212,11 @@ export function GmailPreview() {
           If it says &quot;has not been used&quot; or &quot;Access Not Configured&quot;, enable <strong>Gmail API</strong> in{" "}
           <a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank" rel="noopener noreferrer" className="underline">Google Cloud Console → APIs &amp; Services → Library</a> for your project.
         </p>
+        <p className="mt-2 text-xs text-slate-500">
+          Still stuck? Open{" "}
+          <a href="/api/debug-gmail-token" target="_blank" rel="noopener noreferrer" className="underline">/api/debug-gmail-token</a>{" "}
+          while signed in and share the JSON to debug account linking.
+        </p>
       </div>
     );
   }
