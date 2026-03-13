@@ -20,11 +20,12 @@ export async function GET() {
   const result = await suggestLabelForEmail({
     from: "newsletter@example.com",
     subject: "Your weekly digest",
-    snippet: "Here are this week's top stories...",
-    enabledCategoryKeys: ["priority", "newsletter", "work"],
+    snippet: "Here are this week's top stories. Unsubscribe here.",
+    enabledGpsKeys: ["newsletters", "fyi", "action-required"],
+    enabledDripKeys: ["drip-delegate", "drip-produce"],
   });
   if (result != null) {
-    return NextResponse.json({ ok: true, suggestedCategory: result });
+    return NextResponse.json({ ok: true, suggestedGps: result.gps, suggestedDrip: result.drip });
   }
   // Probe Gemini directly so we can return the exact error in the response
   const res = await fetch(GEMINI_URL, {

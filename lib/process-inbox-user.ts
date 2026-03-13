@@ -1,19 +1,17 @@
 /**
- * Process one user's inbox: suggest label, apply, archive.
+ * Process one user's inbox: suggest Email GPS + DRIP, apply both labels, archive.
  * Used by process-inbox (cron) and gmail/push (live).
  */
 
 import { getGoogleAccessToken } from "@/lib/google-token";
 import { suggestLabelForEmail } from "@/lib/gemini";
-import type { CannedCategoryKey } from "@/lib/label-categories";
+import { GPS_KEYS, DRIP_KEYS, type GpsCategoryKey, type DripCategoryKey } from "@/lib/label-categories";
 import { createClient } from "@supabase/supabase-js";
 
 const GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me";
 
 export type ProcessInboxOptions = {
-  /** If set, only process these message IDs (e.g. from history). Otherwise list INBOX. */
   messageIds?: string[];
-  /** Max messages to process when listing INBOX (default 10, max 20). */
   maxMessages?: number;
 };
 
@@ -43,19 +41,23 @@ export async function processInboxForUser(
       .limit(15),
   ]);
 
-  const categories = (userCats ?? []).filter((r) => r.gmail_label_id != null) as Array<{
-    category_key: string;
-    gmail_label_id: string;
-  }>;
-  const enabledKeys = categories.map((r) => r.category_key as CannedCategoryKey);
-  if (enabledKeys.length === 0) return 0;
+  const labelMap = (userCats ?? [])
+    .filter((r) => r.gmail_label_id != null)
+    .reduce((acc, r) => {
+      acc[r.category_key] = r.gmail_label_id!;
+      return acc;
+    }, {} as Record<string, string>);
+
+  const enabledGpsKeys = GPS_KEYS.filter((k) => labelMap[k]) as GpsCategoryKey[];
+  const enabledDripKeys = DRIP_KEYS.filter((k) => labelMap[k]) as DripCategoryKey[];
+  if (enabledGpsKeys.length === 0) return 0;
 
   const corrections = (correctionsRows ?? []).map((r) => ({
     from: r.from_header ?? "",
     subject: r.subject ?? "",
     snippet: r.snippet ?? "",
-    suggestedCategory: r.suggested_category_key,
-    chosenCategory: r.chosen_category_key,
+    suggestedCategory: r.suggested_category_key ?? "",
+    chosenCategory: r.chosen_category_key ?? "",
   }));
 
   let messageIds: string[] = options.messageIds ?? [];
@@ -93,23 +95,26 @@ export async function processInboxForUser(
     const subject = headers.subject ?? "";
     const snippet = meta.snippet ?? "";
 
-    const suggested = await suggestLabelForEmail({
+    const result = await suggestLabelForEmail({
       from,
       subject,
       snippet,
-      enabledCategoryKeys: enabledKeys,
+      enabledGpsKeys,
+      enabledDripKeys: enabledDripKeys.length > 0 ? enabledDripKeys : (DRIP_KEYS as DripCategoryKey[]),
       corrections,
     });
-    if (suggested == null) continue;
+    if (!result) continue;
 
-    const cat = categories.find((c) => c.category_key === suggested);
-    const labelId = cat?.gmail_label_id;
-    if (!labelId) continue;
+    const gpsLabelId = labelMap[result.gps];
+    if (!gpsLabelId) continue;
+
+    const addLabelIds: string[] = [gpsLabelId];
+    if (labelMap[result.drip]) addLabelIds.push(labelMap[result.drip]);
 
     const modifyRes = await fetch(`${GMAIL_API}/messages/${messageId}/modify`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ addLabelIds: [labelId], removeLabelIds: ["INBOX"] }),
+      body: JSON.stringify({ addLabelIds, removeLabelIds: ["INBOX"] }),
     });
     if (modifyRes.ok) processed++;
   }

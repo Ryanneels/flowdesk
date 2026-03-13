@@ -1,14 +1,13 @@
 /**
- * POST /api/gmail/suggest-label — Gemini suggests a category for an email.
- * Body: { messageId: string } (we fetch the message and call Gemini)
- *   or { from: string, subject: string, snippet: string } (direct).
- * Returns: { suggestedCategory: string } (category_key).
+ * POST /api/gmail/suggest-label — Suggest Email GPS + DRIP for an email.
+ * Body: { messageId: string } or { from, subject, snippet }.
+ * Returns: { suggestedGps, suggestedDrip } and legacy suggestedCategory (same as suggestedGps).
  */
 
 import { auth } from "@/auth";
 import { getGoogleAccessToken } from "@/lib/google-token";
 import { suggestLabelForEmail } from "@/lib/gemini";
-import type { CannedCategoryKey } from "@/lib/label-categories";
+import { GPS_KEYS, DRIP_KEYS, type GpsCategoryKey, type DripCategoryKey } from "@/lib/label-categories";
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -37,7 +36,7 @@ export async function POST(req: NextRequest) {
   const [{ data: userCats }, { data: correctionsRows }] = await Promise.all([
     supabase
       .from("user_label_categories")
-      .select("category_key, enabled")
+      .select("category_key, enabled, gmail_label_id")
       .eq("user_id", session.user.id)
       .eq("enabled", true),
     supabase
@@ -48,10 +47,14 @@ export async function POST(req: NextRequest) {
       .limit(15),
   ]);
 
-  const enabledKeys = (userCats ?? []).map((r) => r.category_key as CannedCategoryKey);
-  if (enabledKeys.length === 0) {
+  const enabledKeys = (userCats ?? [])
+    .filter((r) => r.gmail_label_id != null)
+    .map((r) => r.category_key as string);
+  const enabledGpsKeys = GPS_KEYS.filter((k) => enabledKeys.includes(k)) as GpsCategoryKey[];
+  const enabledDripKeys = DRIP_KEYS.filter((k) => enabledKeys.includes(k)) as DripCategoryKey[];
+  if (enabledGpsKeys.length === 0) {
     return NextResponse.json(
-      { error: "No label categories enabled. Enable at least one in settings." },
+      { error: "No Email GPS labels enabled and mapped. Configure at least one in Settings → Labels." },
       { status: 400 }
     );
   }
@@ -60,15 +63,15 @@ export async function POST(req: NextRequest) {
     from: r.from_header ?? "",
     subject: r.subject ?? "",
     snippet: r.snippet ?? "",
-    suggestedCategory: r.suggested_category_key,
-    chosenCategory: r.chosen_category_key,
+    suggestedCategory: r.suggested_category_key ?? "",
+    chosenCategory: r.chosen_category_key ?? "",
   }));
 
-  let from = body.from;
+  let from = body.from ?? "";
   let subject = body.subject ?? "";
   let snippet = body.snippet ?? "";
 
-  if (body.messageId && (!from || !body.snippet)) {
+  if (body.messageId && (!from || !snippet)) {
     const token = await getGoogleAccessToken(session.user.id);
     if (!token) {
       return NextResponse.json({ error: "Google token missing" }, { status: 400 });
@@ -100,17 +103,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Provide messageId or from, subject, snippet" }, { status: 400 });
   }
 
-  const suggested = await suggestLabelForEmail({
-    from: from ?? "",
+  const result = await suggestLabelForEmail({
+    from,
     subject,
     snippet,
-    enabledCategoryKeys: enabledKeys,
+    enabledGpsKeys,
+    enabledDripKeys: enabledDripKeys.length > 0 ? enabledDripKeys : (DRIP_KEYS as DripCategoryKey[]),
     corrections,
   });
 
-  if (suggested == null) {
-    return NextResponse.json({ error: "Gemini API not configured or failed. Set GEMINI_API_KEY." }, { status: 502 });
+  if (!result) {
+    return NextResponse.json({ error: "Label suggestion failed. Check GEMINI_API_KEY." }, { status: 502 });
   }
 
-  return NextResponse.json({ suggestedCategory: suggested });
+  return NextResponse.json({
+    suggestedGps: result.gps,
+    suggestedDrip: result.drip,
+    suggestedCategory: result.gps,
+  });
 }

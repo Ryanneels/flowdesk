@@ -13,7 +13,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   return (
     <NextAuthSessionProvider
       basePath="/api/auth"
-      refetchInterval={3}
+      refetchInterval={300}
       refetchOnWindowFocus={true}
     >
       {children}

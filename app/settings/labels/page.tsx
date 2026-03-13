@@ -12,6 +12,7 @@ type Category = {
   key: string;
   name: string;
   description: string;
+  type?: "gps" | "drip";
   enabled: boolean;
   gmail_label_id: string | null;
 };
@@ -89,16 +90,20 @@ export default function SettingsLabelsPage() {
             ← Back to FlowDesk
           </Link>
         </nav>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Email label categories</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Email GPS + DRIP labels</h1>
         <p className="mt-1 text-slate-600 dark:text-slate-400">
-          Choose which categories to use for AI labeling and map each to a Gmail label.
+          Map each Email GPS and DRIP category to a Gmail label. Create labels in Gmail first (e.g. &quot;@Action-Required&quot;, &quot;DRIP:Produce&quot;).
         </p>
 
         {loading ? (
           <p className="mt-6 text-slate-500">Loading…</p>
         ) : (
-          <div className="mt-6 space-y-4">
-            {categories.map((c) => (
+          <div className="mt-6 space-y-8">
+            <section>
+              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Email GPS (one per email)</h2>
+              <p className="mt-1 text-sm text-slate-500">Primary folder: where the email goes.</p>
+              <div className="mt-3 space-y-4">
+            {categories.filter((c) => c.type === "gps" || !c.type).map((c) => (
               <div
                 key={c.key}
                 className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/50"
@@ -134,6 +139,50 @@ export default function SettingsLabelsPage() {
                 </div>
               </div>
             ))}
+              </div>
+            </section>
+            <section>
+              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">DRIP Matrix (layer on top)</h2>
+              <p className="mt-1 text-sm text-slate-500">Value/energy tag: Delegate, Replace, Invest, Produce.</p>
+              <div className="mt-3 space-y-4">
+            {categories.filter((c) => c.type === "drip").map((c) => (
+              <div
+                key={c.key}
+                className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/50"
+              >
+                <div className="flex items-start gap-4">
+                  <label className="flex shrink-0 items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={c.enabled}
+                      onChange={(e) => setEnabled(c.key, e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300"
+                    />
+                    <span className="font-medium text-slate-900 dark:text-white">{c.name}</span>
+                  </label>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-slate-500 dark:text-slate-400">{c.description}</p>
+                    <div className="mt-2">
+                      <label className="text-xs text-slate-500">Map to Gmail label</label>
+                      <select
+                        value={c.gmail_label_id ?? ""}
+                        onChange={(e) => setGmailLabelId(c.key, e.target.value || null)}
+                        className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                      >
+                        <option value="">— Create or choose later —</option>
+                        {gmailLabels.map((l) => (
+                          <option key={l.id} value={l.id}>
+                            {l.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+              </div>
+            </section>
             <div className="flex items-center gap-4 pt-4">
               <button
                 type="button"
